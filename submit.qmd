@@ -6,8 +6,8 @@ format:
     embed-resources: true
 ---
 
+## Step 1
 
-Step 1
 ```{r}
 library(data.table)
 library(tidyverse)
@@ -16,35 +16,51 @@ prt.02 <- fread("/Users/seankim/Downloads/ad_viz_plotval_data_2002.csv")
 prt.22 <- fread("/Users/seankim/Downloads/ad_viz_plotval_data_2022.csv")
 ```
 
-dimensions
+Dimensions:
+
 ```{r}
 dim(prt.02)
 dim(prt.22)
 ```
 
-headers and footers
+2002 data has 20 variables and 15976 observations. 2022 data has 20 variables and 56140 observations.
+
+Headers and Footers:
+
 ```{r}
 head(prt.02)
 head(prt.22)
 tail(prt.02)
 tail(prt.22)
 ```
+
 Variable names and types
+
 ```{r}
 str(prt.02)
 str(prt.22)
+summary(prt.02)
+summary(prt.22)
+sum(is.na(prt.02))
+sum(is.na(prt.22))
+
 ```
-Checking data
+
+Checking data: In summary, there was variable that had implausible values - that was Daily Mean PM2.5 Concentrations, which had values \<0. To remove these implausible key values, I filtered to only include
+
 ```{r}
 summary(prt.02$`Daily Mean PM2.5 Concentration`)
 summary(prt.22$`Daily Mean PM2.5 Concentration`)
 ```
-It doesn't make sense for a minimum of -2.2 PM2.5 concentration, so I will subset prt.22 to include data for PM2.5 >0. 
+
+It doesn't make sense for a minimum of -2.2 PM2.5 concentration, so I will subset prt.22 to include data for PM2.5 \>= 0. There were 929 NA's in 2002 data and 4199 NA's in 2022 data, all of which were in the "CBSA_CODE" category.
+
 ```{r}
-prt.22 <- prt.22[prt.22$`Daily Mean PM2.5 Concentration` >= 0]
+prt.22 <- prt.22['Daily Mean PM2.5 Concentration' >= 0, ]
 ```
 
-Step 2: Combine Data
+## Step 2: Combine Data
+
 ```{r}
 data_combined <- rbindlist(list(
   prt.02[, year := 2002], 
@@ -53,7 +69,8 @@ setnames(data_combined, c("Daily Mean PM2.5 Concentration", "SITE_LATITUDE", "SI
 head(data_combined)
 ```
 
-Step 3: Basic Map
+## Step 3: Basic Map
+
 ```{r}
 library(leaflet)
 leaflet(data_combined) %>% 
@@ -68,20 +85,26 @@ leaflet(data_combined) %>%
     popup = ~SiteName, 
     label = "Map of Sites Measured in 2002(red) and 2022 (yellow)")
 ```
-Markers are highly concentrated in the major regions of California - Sacramento, Bay Area, and Los Angeles/San Diego. There is also significant coverage of the rest of the state, with distributed sites all over. There appear to be more sites in 2022 compared to 2002, due to many more yellow markers present compared to the red. 
 
-Step 4: Checking for missing/implausible values of PM2.5 in combined dataset. 
+Markers are highly concentrated in the major regions of California - Sacramento, Bay Area, and Los Angeles/San Diego. There is also significant coverage of the rest of the state, with distributed sites all over. There appear to be more sites in 2022 compared to 2002, due to many more yellow markers present compared to the red.
+
+## Step 4: Checking for missing/implausible values of PM2.5 in combined dataset.
+
 ```{r}
 sum(is.na(data_combined$PM))
 head(data_combined$PM2.5)
 tail(data_combined$PM2.5)
 summary(data_combined$PM2.5)
+
+
 ```
-Data has been cleared of implausible/missing values. Observations with NA or implausible PM2.5 have been removed from the dataset.  
 
-Step 5: 3 different spatial levels for comparing daily concentrations of PM2.5 in CA from 2002 to 2022. 
+Data has been cleared of implausible/missing values. Observations with NA or implausible PM2.5 have been removed from the dataset. Implausible values for PM2.5 \<0 were in the original dataset only for 2022.
 
-State-wide Data: 
+## Step 5: 3 different spatial levels for comparing daily concentrations of PM2.5 in CA from 2002 to 2022.
+
+**State-wide Data:**
+
 ```{r}
 library(ggplot2)
 
@@ -103,9 +126,15 @@ ggplot(average_pm_by_year, aes(x = as.factor(year), y = Average_PM)) +
 t_test_state <- t.test(prt.02$`Daily Mean PM2.5 Concentration`, prt.22$`Daily Mean PM2.5 Concentration`, paired = FALSE)
 t_test_state
 ```
-On the state-wide level, there was a decrease in the average PM2.5 concentration from 2002 to 2022, but that decrease was not statistically significant. 
+
+On the state-wide level, there was a statistically significant decrease in mean daily PM2.5 concentration from 2002 to 2022.
+
+```         
+p-value < 2.2e-16
+```
 
 County-wide data
+
 ```{r}
 
 average_pm_by_county_02 <- data_combined[data_combined$year == 2002, ] %>%
@@ -162,12 +191,18 @@ PMmap22 <- leaflet(average_pm_by_county_22) %>%
           title='Mean Concentrations PM2.5 in 2022', opacity=1)
 PMmap22
 
-
+t_test_county <- t.test(average_pm_by_county_02$Average_PM_2002, average_pm_by_county_22$Average_PM_2022, paired = FALSE)
+t_test_county
 ```
-Decrease overall average in PM2.5 concentrations by county from 2002 to 2022.
 
+There was a statistically significnat decrease in the daily average PM2.5 concentrations by county from 2002 to 2022.
+
+```         
+p-value = 8.163e-06
+```
 
 Site-specific data
+
 ```{r}
 average_pm_by_site_02 <- data_combined[data_combined$year == 2002, ] %>%
   group_by(SiteName) %>% 
@@ -222,8 +257,13 @@ PMmap22.s <- leaflet(average_pm_by_site_22) %>%
   addLegend('bottomleft', pal=temp.pal22.s, values=average_pm_by_site_22$Average_PM_2022_site,
           title='Mean Concentrations PM2.5 by site in 2022', opacity=1)
 PMmap22.s
+
+t_test_site <- t.test(average_pm_by_site_02$Average_PM_2002_site, average_pm_by_site_22$Average_PM_2022_site, paired = FALSE)
+t_test_site
 ```
-Decrease overall in average PM2.5 concentrations by site from 2002 to 2022. 
 
+There was a statistically significant decrease in the daily average PM2.5 concentrations by site from 2002 to 2022.
 
-
+```         
+p-value = 3.156e-11
+```
